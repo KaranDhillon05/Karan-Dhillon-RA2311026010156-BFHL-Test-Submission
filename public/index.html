@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BFHL Hierarchy Analyzer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      color: #1f1f1f;
+      margin: 0;
+      padding: 24px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 20px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    p {
+      margin: 0 0 16px;
+      color: #555;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 14px;
+      box-sizing: border-box;
+      resize: vertical;
+    }
+    .actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      border: 1px solid #bbb;
+      background: #f3f3f3;
+      border-radius: 4px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .error {
+      margin-top: 16px;
+      padding: 10px;
+      border: 1px solid #d88;
+      background: #fff3f3;
+      color: #a30000;
+      display: none;
+      border-radius: 4px;
+    }
+    .result {
+      margin-top: 16px;
+      display: none;
+    }
+    pre {
+      background: #f2f2f2;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>BFHL Hierarchy Analyzer</h1>
+    <p>Enter data as a JSON array or one edge per line and click submit.</p>
+
+    <textarea id="inputArea" placeholder='Paste edges as JSON array, e.g. ["A->B", "A->C", "B->D"]
+or one per line: A->B
+A->C
+B->D'></textarea>
+    <div class="actions">
+      <button id="submitBtn" onclick="submitData()">Submit</button>
+      <button onclick="clearAll()">Clear</button>
+    </div>
+    <div class="error" id="errorBox"></div>
+    <div class="result" id="resultBox">
+      <h3>Response</h3>
+      <pre id="resultJson"></pre>
+    </div>
+  </div>
+
+  <script>
+    function parseInput(raw) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        throw new Error('Input is empty');
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (!Array.isArray(parsed)) {
+          throw new Error('Input JSON must be an array');
+        }
+        return parsed.map(String);
+      } catch (e) {
+        if (e.message === 'Input JSON must be an array') {
+          throw e;
+        }
+      }
+
+      return trimmed
+        .split(/[\n,]+/)
+        .map((item) => item.trim().replace(/^["']|["']$/g, ''))
+        .filter(Boolean);
+    }
+
+    function showError(message) {
+      const errorBox = document.getElementById('errorBox');
+      errorBox.textContent = message;
+      errorBox.style.display = 'block';
+    }
+
+    function clearError() {
+      const errorBox = document.getElementById('errorBox');
+      errorBox.style.display = 'none';
+      errorBox.textContent = '';
+    }
+
+    async function submitData() {
+      const submitBtn = document.getElementById('submitBtn');
+      const resultBox = document.getElementById('resultBox');
+      const resultJson = document.getElementById('resultJson');
+      const inputText = document.getElementById('inputArea').value;
+      let dataArray;
+
+      clearError();
+      resultBox.style.display = 'none';
+
+      try {
+        dataArray = parseInput(inputText);
+      } catch (error) {
+        showError(error.message);
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+
+      try {
+        const response = await fetch('/bfhl', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: dataArray })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        resultJson.textContent = JSON.stringify(data, null, 2);
+        resultBox.style.display = 'block';
+      } catch (error) {
+        showError(`API error: ${error.message}`);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit';
+      }
+    }
+
+    function clearAll() {
+      document.getElementById('inputArea').value = '';
+      document.getElementById('resultBox').style.display = 'none';
+      clearError();
+    }
+
+    document.getElementById('inputArea').value = '["A->B", "A->C", "B->D"]';
+  </script>
+</body>
+</html>
